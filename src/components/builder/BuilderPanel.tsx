@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getTemplates, templateToFiles, buildAndPushProject, getSkills, readFileContent, listTrackedProjects } from '../../lib/api';
+import { getTemplates, templateToFiles, buildAndPushProject, getSkills, readFileContent, listTrackedProjects, validatePromptSize } from '../../lib/api';
 import { useQwen } from '../../hooks/useQwen';
-import type { ProjectTemplate, GeneratedFile, QwenLocation, Skill, ProjectRecord } from '../../types';
+import type { ProjectTemplate, GeneratedFile, QwenLocation, Skill, ProjectRecord, TokenCount } from '../../types';
 
 interface Props {
   qwenLocation: QwenLocation | null;
@@ -48,6 +48,22 @@ export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreate
   const [generating, setGenerating] = useState(false);
   const [streamPreview, setStreamPreview] = useState('');
   const [originalFileContent, setOriginalFileContent] = useState<string | null>(null);
+  const [tokenCount, setTokenCount] = useState<TokenCount | null>(null);
+  const [buildCompleted, setBuildCompleted] = useState(false);
+
+  // Auto-validate prompt size when prompt changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (freeformPrompt || description) {
+        validatePromptSize(freeformPrompt || '', SYSTEM_PROMPT, null, null)
+          .then(setTokenCount)
+          .catch(console.error);
+      } else {
+        setTokenCount(null);
+      }
+    }, 500); // Debounce 500ms
+    return () => clearTimeout(timer);
+  }, [freeformPrompt, description]);
 
   // If we have an activeProjectPath, default outputDir and projectName to it
   useEffect(() => {
@@ -59,6 +75,13 @@ export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreate
       if (dir) setOutputDir(dir);
     }
   }, [activeProjectPath]);
+
+  // Reset buildCompleted when step changes back to setup
+  useEffect(() => {
+    if (step === 'setup') {
+      setBuildCompleted(false);
+    }
+  }, [step]);
 
   const { generate } = useQwen();
 
@@ -79,6 +102,10 @@ export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreate
   }, [selectedFile, activeProjectPath]);
 
   const generateFiles = async () => {
+    if (buildCompleted) {
+      setError('Project already built. Click "Build Another Project" to start over.');
+      return;
+    }
     if (!projectName.trim()) { setError('Project name is required'); return; }
     setError(null);
     setGenerating(true);
@@ -175,6 +202,7 @@ Return a JSON array of ALL project files with their full content.`;
         message: result.message,
         url: result.repo_url ?? undefined,
       });
+      setBuildCompleted(true);
       setStep('done');
       if (result.success) onProjectCreated();
     } catch (e: any) {
@@ -193,6 +221,8 @@ Return a JSON array of ALL project files with their full content.`;
     setBuildResult(null);
     setError(null);
     setSelectedTemplate('');
+    setBuildCompleted(false);
+    setGenerating(false);
   };
 
   const selectedFileContent = generatedFiles.find(f => f.path === selectedFile)?.content ?? '';
@@ -278,6 +308,17 @@ Return a JSON array of ALL project files with their full content.`;
                   value={freeformPrompt}
                   onChange={e => setFreeformPrompt(e.target.value)}
                 />
+                {tokenCount && (
+                  <div className={`token-counter ${tokenCount.is_safe ? 'safe' : 'warning'}`}>
+                    <span>Tokens: {tokenCount.count.toLocaleString()} / {tokenCount.max_allowed.toLocaleString()}</span>
+                    {tokenCount.warning && (
+                      <span className="token-warning">⚠️ {tokenCount.warning}</span>
+                    )}
+                    {!tokenCount.is_safe && (
+                      <span className="token-error">❌ Prompt too large! Reduce by {tokenCount.count - tokenCount.max_allowed} tokens.</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {skills.length > 0 && (
@@ -390,12 +431,14 @@ Return a JSON array of ALL project files with their full content.`;
           <button
             className="btn btn-primary"
             onClick={generateFiles}
-            disabled={generating || (!activeProjectPath && (!projectName || (mode === 'template' && !selectedTemplate)))}
+            disabled={generating || buildCompleted || (!activeProjectPath && (!projectName || (mode === 'template' && !selectedTemplate)))}
             style={{ marginTop: '16px' }}
           >
             {generating
               ? '⏳ Generating...'
-              : (activeProjectPath ? '⚡ Generate Modifications' : '→ Generate Project')}
+              : buildCompleted
+                ? '✅ Project Built'
+                : (activeProjectPath ? '⚡ Generate Modifications' : '→ Generate Project')}
           </button>
         </div>
       )}
@@ -407,8 +450,14 @@ Return a JSON array of ALL project files with their full content.`;
             <h2>Preview — {generatedFiles.length} files</h2>
             <div className="preview-actions">
               <button className="btn btn-secondary" onClick={() => setStep('setup')}>← Back</button>
-              <button className="btn btn-primary" onClick={buildProject}>
-                {activeProjectPath ? '🚀 Apply Changes' : '🚀 Build & Push to GitHub'}
+              <button 
+                className="btn btn-primary" 
+                onClick={buildProject}
+                disabled={buildCompleted}
+              >
+                {buildCompleted 
+                  ? '✅ Already Built' 
+                  : (activeProjectPath ? '🚀 Apply Changes' : '🚀 Build & Push to GitHub')}
               </button>
             </div>
           </div>

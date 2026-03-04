@@ -209,5 +209,21 @@
     "remote_url": "https://github.com/caseboybelize501/modular-ai-builder",
     "tech_stack": [],
     "last_modified": 1772648229
+  },
+  {
+    "id": "e033606c-02eb-4263-9c2e-490a1484f28f",
+    "name": "qrokcli",
+    "path": "D:\\Users\\CASE\\Projects/qrokcli",
+    "remote_url": "https://github.com/caseboybelize501/qrokcli",
+    "tech_stack": [],
+    "last_modified": 1772652108
+  },
+  {
+    "id": "380d2ffa-96e4-4258-8dd5-e1d64db67c80",
+    "name": "claudedesktopqroq",
+    "path": "D:\\Users\\CASE\\Projects/claudedesktopqroq",
+    "remote_url": "https://github.com/caseboybelize501/claudedesktopqroq",
+    "tech_stack": [],
+    "last_modified": 1772652353
   }
 ]

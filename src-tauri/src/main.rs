@@ -9,9 +9,11 @@ mod commands {
     pub mod modifier;
     pub mod qwen;
     pub mod tracker;
+    pub mod token_counter;
+    pub mod validator;
 }
 
-use commands::{builder::*, executor::*, github::*, injector::*, modifier::*, qwen::*, tracker::*};
+use commands::{builder::*, executor::*, github::*, injector::*, modifier::*, qwen::*, tracker::*, token_counter::*, validator::*};
 
 fn main() {
     tauri::Builder::default()
@@ -20,6 +22,15 @@ fn main() {
             // Qwen / AI
             locate_qwen,
             qwen_generate,
+            // Token Counter
+            count_tokens,
+            validate_prompt_size,
+            estimate_conversation_size,
+            // Validator
+            validate_typescript,
+            validate_rust,
+            validate_python,
+            run_validation,
             // GitHub
             gh_auth_status,
             gh_auth_login,
@@ -32,6 +43,11 @@ fn main() {
             gh_create_pr,
             gh_list_issues,
             gh_create_issue,
+            // Branch Operations
+            create_branch,
+            list_branches,
+            checkout_branch,
+            push_branch,
             // Builder
             get_templates,
             get_skills,

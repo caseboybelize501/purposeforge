@@ -6,6 +6,44 @@ export interface QwenLocation {
   model: string | null;
 }
 
+// ── Token Counter ─────────────────────────────────────────────────────────────
+export interface TokenCount {
+  count: number;
+  max_allowed: number;
+  remaining: number;
+  is_safe: boolean;
+  warning?: string;
+}
+
+export interface Message {
+  role: string;
+  content: string;
+}
+
+// ── Code Validator ───────────────────────────────────────────────────────────
+export interface ValidationResult {
+  language: string;
+  success: boolean;
+  output: string;
+  errors: string[];
+  duration_ms: number;
+}
+
+export interface ValidationReport {
+  project_path: string;
+  overall_success: boolean;
+  results: ValidationResult[];
+  total_duration_ms: number;
+}
+
+// ── Branch Operations ────────────────────────────────────────────────────────
+export interface Branch {
+  name: string;
+  is_current: boolean;
+  is_protected: boolean;
+  last_commit_sha: string | null;
+}
+
 // ── GitHub ────────────────────────────────────────────────────────────────────
 export interface Repo {
   name: string;

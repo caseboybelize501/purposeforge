@@ -2,7 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   QwenLocation, Repo, PullRequest, Issue, CommitResult,
   GeneratedFile, ProjectTemplate, BuildProjectRequest, BuildResult,
-  ProjectRecord, ModuleDefinition, Skill
+  ProjectRecord, ModuleDefinition, Skill, TokenCount, Message,
+  ValidationResult, ValidationReport, Branch
 } from '../types';
 
 // ── Qwen ──────────────────────────────────────────────────────────────────────
@@ -11,6 +12,34 @@ export const locateQwen = () =>
 
 export const qwenGenerate = (location: QwenLocation, prompt: string, system?: string, projectPath?: string | null) =>
   invoke<string>('qwen_generate', { location, prompt, system: system ?? null, projectPath: projectPath ?? null });
+
+// ── Token Counter ─────────────────────────────────────────────────────────────
+export const countTokens = (text: string) =>
+  invoke<TokenCount>('count_tokens', { text });
+
+export const validatePromptSize = (
+  prompt: string,
+  system?: string | null,
+  context?: string | null,
+  maxTokens?: number | null
+) =>
+  invoke<TokenCount>('validate_prompt_size', { prompt, system: system ?? null, context: context ?? null, maxTokens: maxTokens ?? null });
+
+export const estimateConversationSize = (messages: Message[], newPrompt: string) =>
+  invoke<TokenCount>('estimate_conversation_size', { messages, newPrompt });
+
+// ── Code Validator ───────────────────────────────────────────────────────────
+export const validateTypeScript = (projectPath: string) =>
+  invoke<ValidationResult>('validate_typescript', { projectPath });
+
+export const validateRust = (projectPath: string) =>
+  invoke<ValidationResult>('validate_rust', { projectPath });
+
+export const validatePython = (projectPath: string) =>
+  invoke<ValidationResult>('validate_python', { projectPath });
+
+export const runValidation = (projectPath: string) =>
+  invoke<ValidationReport>('run_validation', { projectPath });
 
 // ── GitHub Auth ───────────────────────────────────────────────────────────────
 export const ghAuthStatus = () =>
@@ -48,6 +77,19 @@ export const ghListIssues = (fullName: string, state?: string) =>
 
 export const ghCreateIssue = (fullName: string, title: string, body?: string, labels?: string[]) =>
   invoke<Issue>('gh_create_issue', { fullName, title, body: body ?? null, labels: labels ?? null });
+
+// ── Branch Operations ────────────────────────────────────────────────────────
+export const createBranch = (repoPath: string, branchName: string, base?: string | null) =>
+  invoke<string>('create_branch', { repoPath, branchName, base: base ?? null });
+
+export const listBranches = (repoPath: string) =>
+  invoke<Branch[]>('list_branches', { repoPath });
+
+export const checkoutBranch = (repoPath: string, branchName: string) =>
+  invoke<string>('checkout_branch', { repoPath, branchName });
+
+export const pushBranch = (repoPath: string, upstream?: string | null) =>
+  invoke<string>('push_branch', { repoPath, upstream: upstream ?? null });
 
 // ── Builder ───────────────────────────────────────────────────────────────────
 export const getTemplates = () =>

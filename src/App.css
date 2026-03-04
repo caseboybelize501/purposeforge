@@ -362,6 +362,40 @@ body,
   font-weight: 600;
 }
 
+/* Token Counter */
+.token-counter {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.token-counter.safe {
+  background: rgba(61, 214, 140, 0.1);
+  border: 1px solid rgba(61, 214, 140, 0.3);
+  color: var(--green);
+}
+
+.token-counter.warning {
+  background: rgba(247, 184, 79, 0.1);
+  border: 1px solid rgba(247, 184, 79, 0.3);
+  color: var(--yellow);
+}
+
+.token-warning {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.token-error {
+  font-size: 11px;
+  color: var(--red);
+  font-weight: 600;
+}
+
 .template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

@@ -42,6 +42,14 @@ pub struct CommitResult {
     pub message: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Branch {
+    pub name: String,
+    pub is_current: bool,
+    pub is_protected: bool,
+    pub last_commit_sha: Option<String>,
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -439,4 +447,167 @@ pub async fn gh_create_issue(
         url: i["url"].as_str().unwrap_or("").to_string(),
         labels: labels.unwrap_or_default(),
     })
+}
+
+// ── Branch Operations ─────────────────────────────────────────────────────────
+
+/// Create a new branch from a base branch
+#[tauri::command]
+pub async fn create_branch(
+    repo_path: String,
+    branch_name: String,
+    base: Option<String>,
+) -> Result<String, String> {
+    let base = base.unwrap_or("main".to_string());
+    
+    // First, make sure we're on the base branch
+    let checkout_base = Command::new("git")
+        .args(["checkout", &base])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !checkout_base.status.success() {
+        // Base branch might not exist, try origin/base
+        let checkout_origin = Command::new("git")
+            .args(["checkout", "-b", &branch_name, &format!("origin/{}", base)])
+            .current_dir(&repo_path)
+            .output()
+            .map_err(|e| e.to_string())?;
+        
+        if checkout_origin.status.success() {
+            return Ok(format!("Created branch '{}' from origin/{}", branch_name, base));
+        }
+        return Err(String::from_utf8_lossy(&checkout_origin.stderr).to_string());
+    }
+
+    // Pull latest changes
+    let _ = Command::new("git")
+        .args(["pull", "origin", &base])
+        .current_dir(&repo_path)
+        .output();
+
+    // Create and checkout new branch
+    let checkout_new = Command::new("git")
+        .args(["checkout", "-b", &branch_name])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !checkout_new.status.success() {
+        return Err(String::from_utf8_lossy(&checkout_new.stderr).to_string());
+    }
+
+    Ok(format!("Created and switched to branch '{}'", branch_name))
+}
+
+/// List all branches in the repository
+#[tauri::command]
+pub async fn list_branches(repo_path: String) -> Result<Vec<Branch>, String> {
+    // Get current branch
+    let current_output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let current_branch = String::from_utf8_lossy(&current_output.stdout).trim().to_string();
+
+    // Get all local branches
+    let branches_output = Command::new("git")
+        .args(["branch", "--format", "%(refname:short)|%(objectname:short)"])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let branches_str = String::from_utf8_lossy(&branches_output.stdout);
+    
+    let mut branches = vec![];
+    for line in branches_str.lines() {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() >= 2 {
+            let name = parts[0].to_string();
+            branches.push(Branch {
+                name: name.clone(),
+                is_current: name == current_branch,
+                is_protected: name == "main" || name == "master" || name == "develop",
+                last_commit_sha: Some(parts[1].to_string()),
+            });
+        }
+    }
+
+    // Get remote branches
+    let remote_output = Command::new("git")
+        .args(["branch", "-r", "--format", "%(refname:short)"])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let remote_branches_str = String::from_utf8_lossy(&remote_output.stdout);
+    for line in remote_branches_str.lines() {
+        let name = line.trim().trim_start_matches("origin/").to_string();
+        if !branches.iter().any(|b| b.name == name) && !name.is_empty() {
+            branches.push(Branch {
+                name,
+                is_current: false,
+                is_protected: false,
+                last_commit_sha: None,
+            });
+        }
+    }
+
+    Ok(branches)
+}
+
+/// Checkout an existing branch
+#[tauri::command]
+pub async fn checkout_branch(repo_path: String, branch_name: String) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(["checkout", &branch_name])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(format!("Switched to branch '{}'", branch_name))
+}
+
+/// Push current branch to origin
+#[tauri::command]
+pub async fn push_branch(repo_path: String, upstream: Option<String>) -> Result<String, String> {
+    // Get current branch name
+    let current_output = Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let current_branch = String::from_utf8_lossy(&current_output.stdout).trim().to_string();
+
+    let mut args = vec!["push".to_string()];
+    
+    if let Some(up) = upstream {
+        args.push("-u".to_string());
+        args.push("origin".to_string());
+        args.push(format!("{}:{}", current_branch, up));
+    } else {
+        args.push("-u".to_string());
+        args.push("origin".to_string());
+        args.push(current_branch.clone());
+    }
+
+    let output = Command::new("git")
+        .args(&args)
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(format!("Pushed branch '{}' to origin", current_branch))
 }

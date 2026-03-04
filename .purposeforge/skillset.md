@@ -10,7 +10,7 @@
 ## 📜 Coding Laws
 - [TS] **Strict Typing**: Always use TypeScript interfaces. Never use `any`.
 - [RUST] **Safety First**: Use Rust for all destructive file operations.
-- [CORE] **AI Context**: Always wrap code suggestions in Markdown blocks.
+- [CORE] **JSON-First**: When generating files, respond ONLY with valid JSON arrays. No markdown, no explanations.
 - [TS] **Modularity**: Components must be reusable and reside in `src/components`.
 
 ## 🛠️ API Surface (Tauri Commands)
