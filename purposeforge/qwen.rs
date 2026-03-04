@@ -11,26 +11,29 @@ pub struct QwenLocation {
     pub model: Option<String>,
 }
 
-/// Searches for Qwen Coder in all known locations across Windows/macOS/Linux
+/// Searches for coding models in all known locations across Windows/macOS/Linux
 #[tauri::command]
 pub async fn locate_qwen() -> Result<QwenLocation, String> {
     // 1. Check Ollama first (most common)
     if let Ok(output) = Command::new("ollama").args(["list"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Look for any qwen model
+        // Look for coding models: qwen-coder, codestral, nemotron, etc.
+        let coding_model_keywords = ["coder", "codestral", "nemotron", "code"];
         for line in stdout.lines() {
             let lower = line.to_lowercase();
-            if lower.contains("qwen") && lower.contains("code") {
-                let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
-                return Ok(QwenLocation {
-                    found: true,
-                    method: "ollama".into(),
-                    path: which_binary("ollama"),
-                    model: Some(model),
-                });
+            for keyword in &coding_model_keywords {
+                if lower.contains(keyword) {
+                    let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
+                    return Ok(QwenLocation {
+                        found: true,
+                        method: "ollama".into(),
+                        path: which_binary("ollama"),
+                        model: Some(model),
+                    });
+                }
             }
         }
-        // Ollama exists but no qwen model — still report ollama is available
+        // Ollama exists but no coding model found — still report ollama is available
         if output.status.success() {
             return Ok(QwenLocation {
                 found: false,
