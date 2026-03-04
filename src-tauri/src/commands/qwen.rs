@@ -13,15 +13,33 @@ pub struct QwenLocation {
 /// Searches for coding models in all known locations across Windows/macOS/Linux
 #[tauri::command]
 pub async fn locate_qwen() -> Result<QwenLocation, String> {
-    // 1. Check Ollama first (most common)
+    // 1. Check Ollama first (most common) - list ALL models
     if let Ok(output) = Command::new("ollama").args(["list"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        // Look for coding models: qwen-coder, codestral, nemotron, etc.
-        let coding_model_keywords = ["coder", "codestral", "nemotron", "code"];
-        for line in stdout.lines() {
-            let lower = line.to_lowercase();
-            for keyword in &coding_model_keywords {
-                if lower.contains(keyword) {
+        
+        // Priority order for coding models (first match wins)
+        // Add your preferred model at the top
+        let model_priority = [
+            "nemotron-claude",    // Your preferred coding model
+            "nemotron-3-nano",
+            "qwen-coder",
+            "codestral",
+            "qwen3-coder",
+            "qwen35",
+            "qwen2.5",
+            "qwen",
+            "llama4",
+            "gemma",
+            "glm-4.7",
+            "lfm2",
+        ];
+        
+        let lines: Vec<&str> = stdout.lines().collect();
+        
+        // First pass: look for priority models
+        for priority_model in &model_priority {
+            for line in &lines {
+                if line.to_lowercase().contains(priority_model) {
                     let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
                     return Ok(QwenLocation {
                         found: true,
@@ -32,15 +50,29 @@ pub async fn locate_qwen() -> Result<QwenLocation, String> {
                 }
             }
         }
-        // Ollama exists but no coding model found — still report ollama is available
-        if output.status.success() {
-            return Ok(QwenLocation {
-                found: false,
-                method: "ollama_no_model".into(),
-                path: which_binary("ollama"),
-                model: None,
-            });
+        
+        // Second pass: use first available model if no priority match
+        if output.status.success() && !lines.is_empty() {
+            if let Some(first_line) = lines.iter().find(|l| !l.is_empty()) {
+                let model = first_line.split_whitespace().next().unwrap_or("").to_string();
+                if !model.is_empty() {
+                    return Ok(QwenLocation {
+                        found: true,
+                        method: "ollama".into(),
+                        path: which_binary("ollama"),
+                        model: Some(model),
+                    });
+                }
+            }
         }
+        
+        // Ollama exists but no models found
+        return Ok(QwenLocation {
+            found: false,
+            method: "ollama_no_model".into(),
+            path: which_binary("ollama"),
+            model: None,
+        });
     }
 
     // 2. Check LM Studio local server (runs on port 1234)
