@@ -154,17 +154,25 @@ async fn stream_ollama(
     system: Option<&str>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let mut body = serde_json::json!({
-        "model": model,
-        "prompt": prompt,
-        "stream": true
-    });
+    
+    let mut messages = vec![];
     if let Some(sys) = system {
-        body["system"] = serde_json::Value::String(sys.to_string());
+        messages.push(serde_json::json!({"role": "system", "content": sys}));
     }
+    messages.push(serde_json::json!({"role": "user", "content": prompt}));
+    
+    let body = serde_json::json!({
+        "model": model,
+        "messages": messages,
+        "stream": true,
+        "options": {
+            "num_predict": 8192,
+            "temperature": 0.2
+        }
+    });
 
     let resp = client
-        .post("http://localhost:11434/api/generate")
+        .post("http://localhost:11434/api/chat")
         .json(&body)
         .send()
         .await
@@ -179,7 +187,7 @@ async fn stream_ollama(
         let text = String::from_utf8_lossy(&chunk);
         for line in text.lines() {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                if let Some(token) = val["response"].as_str() {
+                if let Some(token) = val["message"]["content"].as_str() {
                     full_response.push_str(token);
                     let _ = app.emit("qwen-token", token.to_string());
                 }
