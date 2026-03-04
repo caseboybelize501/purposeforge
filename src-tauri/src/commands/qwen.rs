@@ -10,69 +10,34 @@ pub struct QwenLocation {
     pub model: Option<String>,
 }
 
-/// Searches for coding models in all known locations across Windows/macOS/Linux
+/// Searches for Qwen Coder in all known locations across Windows/macOS/Linux
 #[tauri::command]
 pub async fn locate_qwen() -> Result<QwenLocation, String> {
-    // 1. Check Ollama first (most common) - list ALL models
+    // 1. Check Ollama first (most common)
     if let Ok(output) = Command::new("ollama").args(["list"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
-        // Priority order for coding models (first match wins)
-        // Add your preferred model at the top
-        let model_priority = [
-            "nemotron-claude",    // Your preferred coding model
-            "nemotron-3-nano",
-            "qwen-coder",
-            "codestral",
-            "qwen3-coder",
-            "qwen35",
-            "qwen2.5",
-            "qwen",
-            "llama4",
-            "gemma",
-            "glm-4.7",
-            "lfm2",
-        ];
-        
-        let lines: Vec<&str> = stdout.lines().collect();
-        
-        // First pass: look for priority models
-        for priority_model in &model_priority {
-            for line in &lines {
-                if line.to_lowercase().contains(priority_model) {
-                    let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
-                    return Ok(QwenLocation {
-                        found: true,
-                        method: "ollama".into(),
-                        path: which_binary("ollama"),
-                        model: Some(model),
-                    });
-                }
+        // Look for any qwen model
+        for line in stdout.lines() {
+            let lower = line.to_lowercase();
+            if lower.contains("qwen") && lower.contains("code") {
+                let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
+                return Ok(QwenLocation {
+                    found: true,
+                    method: "ollama".into(),
+                    path: which_binary("ollama"),
+                    model: Some(model),
+                });
             }
         }
-        
-        // Second pass: use first available model if no priority match
-        if output.status.success() && !lines.is_empty() {
-            if let Some(first_line) = lines.iter().find(|l| !l.is_empty()) {
-                let model = first_line.split_whitespace().next().unwrap_or("").to_string();
-                if !model.is_empty() {
-                    return Ok(QwenLocation {
-                        found: true,
-                        method: "ollama".into(),
-                        path: which_binary("ollama"),
-                        model: Some(model),
-                    });
-                }
-            }
+        // Ollama exists but no qwen model — still report ollama is available
+        if output.status.success() {
+            return Ok(QwenLocation {
+                found: false,
+                method: "ollama_no_model".into(),
+                path: which_binary("ollama"),
+                model: None,
+            });
         }
-        
-        // Ollama exists but no models found
-        return Ok(QwenLocation {
-            found: false,
-            method: "ollama_no_model".into(),
-            path: which_binary("ollama"),
-            model: None,
-        });
     }
 
     // 2. Check LM Studio local server (runs on port 1234)
@@ -155,35 +120,6 @@ fn get_search_paths() -> Vec<String> {
     ]
 }
 
-fn get_file_tree(dir: &std::path::Path, prefix: &str, depth: u8) -> String {
-    if depth == 0 { return String::new(); }
-    let mut tree = String::new();
-    let mut entries_vec = vec![];
-    
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            entries_vec.push(entry);
-        }
-    }
-    
-    // Sort directories first, then files
-    entries_vec.sort_by_key(|a| (!a.path().is_dir(), a.file_name()));
-
-    for entry in entries_vec {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name == "node_modules" || name == "target" || name == ".git" || name == "dist" || name == "build" || name == ".next" {
-            continue;
-        }
-        if entry.path().is_dir() {
-            tree.push_str(&format!("{}📁 {}/\n", prefix, name));
-            tree.push_str(&get_file_tree(&entry.path(), &format!("{}  ", prefix), depth - 1));
-        } else {
-            tree.push_str(&format!("{}📄 {}\n", prefix, name));
-        }
-    }
-    tree
-}
-
 /// Stream a prompt to Qwen and emit tokens back to the frontend via Tauri events
 #[tauri::command]
 pub async fn qwen_generate(
@@ -191,67 +127,11 @@ pub async fn qwen_generate(
     location: QwenLocation,
     prompt: String,
     system: Option<String>,
-    project_path: Option<String>,
-    context_files: Option<Vec<String>>,
 ) -> Result<String, String> {
-    // 1. Load and Prune the PurposeForge Skillset
-    let skillset_path = ".purposeforge/skillset.md";
-    let skillset_raw = std::fs::read_to_string(skillset_path).unwrap_or_default();
-    
-    // Determine tech stack for pruning
-    let is_rust = project_path.as_ref().map(|p| std::path::Path::new(p).join("Cargo.toml").exists()).unwrap_or(false);
-    let is_python = project_path.as_ref().map(|p| std::path::Path::new(p).join("requirements.txt").exists()).unwrap_or(false);
-    let is_ts = project_path.as_ref().map(|p| std::path::Path::new(p).join("package.json").exists()).unwrap_or(true); // Default to TS for UI
-
-    let prunned_skillset: String = skillset_raw.lines()
-        .filter(|line| {
-            if line.contains("[CORE]") { return true; }
-            if is_rust && line.contains("[RUST]") { return true; }
-            if is_python && line.contains("[PYTHON]") { return true; }
-            if is_ts && line.contains("[TS]") { return true; }
-            // If no tags, keep it (headers, etc)
-            !line.contains("[") || !line.contains("]")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    // 2. Local Project Context (Memory)
-    let mut project_context = String::new();
-    if let Some(path) = project_path {
-        let p = std::path::Path::new(&path);
-        let tree = get_file_tree(p, "", 3); // Map up to 3 levels deep
-        let readme = std::fs::read_to_string(p.join("README.md")).unwrap_or_else(|_| "No README found.".to_string());
-        
-        project_context = format!(
-            "\n\n### ACTIVE PROJECT CONTEXT\nPath: {}\n\n#### Directory Structure:\n{}\n\n#### README.md:\n{}", 
-            path, tree, readme
-        );
-
-        if let Some(files) = context_files {
-            project_context.push_str("\n\n#### Provided Context Files:\n");
-            for file in files {
-                let file_path = p.join(file.trim());
-                if let Ok(content) = std::fs::read_to_string(&file_path) {
-                    project_context.push_str(&format!("--- FILE: {} ---\n{}\n\n", file, content));
-                }
-            }
-        }
-    }
-
-    // 3. Combine prompts
-    let combined_system = format!(
-        "{}{}\n\nAdditional Instructions:\n{}", 
-        prunned_skillset, 
-        project_context,
-        system.unwrap_or_default()
-    );
-
-    let system_arg = if combined_system.is_empty() { None } else { Some(combined_system) };
-
     match location.method.as_str() {
         "ollama" => {
             let model = location.model.unwrap_or("qwen2.5-coder:latest".into());
-            stream_ollama(&app, &model, &prompt, system_arg.as_deref()).await
+            stream_ollama(&app, &model, &prompt, system.as_deref()).await
         }
         "lmstudio" => {
             stream_openai_compat(
@@ -259,7 +139,7 @@ pub async fn qwen_generate(
                 "http://localhost:1234/v1/chat/completions",
                 &location.model.unwrap_or("qwen".into()),
                 &prompt,
-                system_arg.as_deref(),
+                system.as_deref(),
             ).await
         }
         _ => Err("Qwen not found. Please install via Ollama: `ollama pull qwen2.5-coder`".into()),
@@ -273,25 +153,21 @@ async fn stream_ollama(
     system: Option<&str>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
-    
-    let mut messages = vec![];
-    if let Some(sys) = system {
-        messages.push(serde_json::json!({"role": "system", "content": sys}));
-    }
-    messages.push(serde_json::json!({"role": "user", "content": prompt}));
-    
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
-        "messages": messages,
+        "prompt": prompt,
         "stream": true,
         "options": {
-            "num_predict": 8192,
+            "num_predict": 16384,
             "temperature": 0.2
         }
     });
+    if let Some(sys) = system {
+        body["system"] = serde_json::Value::String(sys.to_string());
+    }
 
     let resp = client
-        .post("http://localhost:11434/api/chat")
+        .post("http://localhost:11434/api/generate")
         .json(&body)
         .send()
         .await
@@ -306,7 +182,7 @@ async fn stream_ollama(
         let text = String::from_utf8_lossy(&chunk);
         for line in text.lines() {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                if let Some(token) = val["message"]["content"].as_str() {
+                if let Some(token) = val["response"].as_str() {
                     full_response.push_str(token);
                     let _ = app.emit("qwen-token", token.to_string());
                 }

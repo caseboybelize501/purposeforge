@@ -1,5 +1,4 @@
-use std::process::{Command, Stdio};
-use std::io::{BufRead, BufReader};
+use std::process::Command;
 use tauri::{AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
 
@@ -11,69 +10,34 @@ pub struct QwenLocation {
     pub model: Option<String>,
 }
 
-/// Searches for coding models in all known locations across Windows/macOS/Linux
+/// Searches for Qwen Coder in all known locations across Windows/macOS/Linux
 #[tauri::command]
 pub async fn locate_qwen() -> Result<QwenLocation, String> {
-    // 1. Check Ollama first (most common) - list ALL models
+    // 1. Check Ollama first (most common)
     if let Ok(output) = Command::new("ollama").args(["list"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        
-        // Priority order for coding models (first match wins)
-        // Add your preferred model at the top
-        let model_priority = [
-            "nemotron-claude",    // Your preferred coding model
-            "nemotron-3-nano",
-            "qwen-coder",
-            "codestral",
-            "qwen3-coder",
-            "qwen35",
-            "qwen2.5",
-            "qwen",
-            "llama4",
-            "gemma",
-            "glm-4.7",
-            "lfm2",
-        ];
-        
-        let lines: Vec<&str> = stdout.lines().collect();
-        
-        // First pass: look for priority models
-        for priority_model in &model_priority {
-            for line in &lines {
-                if line.to_lowercase().contains(priority_model) {
-                    let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
-                    return Ok(QwenLocation {
-                        found: true,
-                        method: "ollama".into(),
-                        path: which_binary("ollama"),
-                        model: Some(model),
-                    });
-                }
+        // Look for any qwen model
+        for line in stdout.lines() {
+            let lower = line.to_lowercase();
+            if lower.contains("qwen") && lower.contains("code") {
+                let model = line.split_whitespace().next().unwrap_or("qwen2.5-coder").to_string();
+                return Ok(QwenLocation {
+                    found: true,
+                    method: "ollama".into(),
+                    path: which_binary("ollama"),
+                    model: Some(model),
+                });
             }
         }
-        
-        // Second pass: use first available model if no priority match
-        if output.status.success() && !lines.is_empty() {
-            if let Some(first_line) = lines.iter().find(|l| !l.is_empty()) {
-                let model = first_line.split_whitespace().next().unwrap_or("").to_string();
-                if !model.is_empty() {
-                    return Ok(QwenLocation {
-                        found: true,
-                        method: "ollama".into(),
-                        path: which_binary("ollama"),
-                        model: Some(model),
-                    });
-                }
-            }
+        // Ollama exists but no qwen model — still report ollama is available
+        if output.status.success() {
+            return Ok(QwenLocation {
+                found: false,
+                method: "ollama_no_model".into(),
+                path: which_binary("ollama"),
+                model: None,
+            });
         }
-        
-        // Ollama exists but no models found
-        return Ok(QwenLocation {
-            found: false,
-            method: "ollama_no_model".into(),
-            path: which_binary("ollama"),
-            model: None,
-        });
     }
 
     // 2. Check LM Studio local server (runs on port 1234)
@@ -189,25 +153,21 @@ async fn stream_ollama(
     system: Option<&str>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
-    
-    let mut messages = vec![];
-    if let Some(sys) = system {
-        messages.push(serde_json::json!({"role": "system", "content": sys}));
-    }
-    messages.push(serde_json::json!({"role": "user", "content": prompt}));
-    
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
-        "messages": messages,
+        "prompt": prompt,
         "stream": true,
         "options": {
-            "num_predict": 8192,
+            "num_predict": 16384,
             "temperature": 0.2
         }
     });
+    if let Some(sys) = system {
+        body["system"] = serde_json::Value::String(sys.to_string());
+    }
 
     let resp = client
-        .post("http://localhost:11434/api/chat")
+        .post("http://localhost:11434/api/generate")
         .json(&body)
         .send()
         .await
@@ -222,7 +182,7 @@ async fn stream_ollama(
         let text = String::from_utf8_lossy(&chunk);
         for line in text.lines() {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                if let Some(token) = val["message"]["content"].as_str() {
+                if let Some(token) = val["response"].as_str() {
                     full_response.push_str(token);
                     let _ = app.emit("qwen-token", token.to_string());
                 }

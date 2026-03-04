@@ -2,9 +2,6 @@ use std::fs;
 use std::process::Command;
 use serde::{Deserialize, Serialize};
 
-// Import validator module for pre-push checks
-pub use super::validator::{run_validation as run_validation_internal};
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Skill {
     pub id: String,
@@ -339,20 +336,8 @@ pub async fn build_and_push_project(
     fs::write(format!("{project_dir}/.gitignore"), gitignore)
         .map_err(|e| format!("Failed to write .gitignore: {e}"))?;
 
-    // 3.5 Run Pre-Push Validation
-    // Run validation before committing to catch errors early
-    let validation_result = run_validation_internal(&project_dir)?;
-    if !validation_result.overall_success {
-        let errors: Vec<String> = validation_result
-            .results
-            .iter()
-            .flat_map(|r| r.errors.clone())
-            .collect();
-        return Err(format!(
-            "Pre-push validation failed:\\n{}",
-            errors.join("\\n")
-        ));
-    }
+    // 3.5 Run Pre-Push Checks
+    // Removed based on user request
 
     // 4. Git init
     let git_init = Command::new("git")

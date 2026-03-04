@@ -4,7 +4,7 @@
 [CORE] PurposeForge is a modular project builder consisting of:
 1. **Frontend**: React + TypeScript + Vite.
 2. **Backend**: Rust (Tauri) for system operations (File I/O, Git, Exec).
-3. **AI Core**: Qwen-2.5-Coder (local via Ollama) for generation and analysis.
+3. **AI Core**: Qwen3-Coder (local via Ollama) for generation and analysis.
 4. **Sidecar**: [PYTHON] Python-based AI utility engine for complex tasks.
 
 ## 📜 Coding Laws

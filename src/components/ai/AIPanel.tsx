@@ -87,7 +87,7 @@ export default function AIPanel({ qwenLocation, activeProjectPath }: Props) {
       {!qwenLocation?.found && (
         <div className="warning-box">
           Qwen Coder is not running. Install via Ollama:<br />
-          <code>ollama pull qwen2.5-coder</code><br />
+          <code>ollama pull qwen3-coder</code><br />
           Then click <strong>Rescan</strong> in the sidebar.
         </div>
       )}

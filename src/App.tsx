@@ -112,7 +112,7 @@ export default function App() {
           <div className="setup-hint">
             {!qwenLocation?.found && (
               <p>Install Qwen:<br />
-                <code>ollama pull qwen2.5-coder</code>
+                <code>ollama pull qwen3-coder</code>
               </p>
             )}
             {!ghLoggedIn && (

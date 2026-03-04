@@ -11,19 +11,42 @@ interface Props {
 }
 
 const SYSTEM_PROMPT = `You are an expert software engineer and code generator.
-When asked to generate code, respond ONLY with a valid JSON array. No preamble, no explanation, no markdown outside the array.
+When asked to generate project files, respond ONLY with a valid JSON array of file objects.
+NO text before the opening bracket, NO text after the closing bracket.
+NO markdown code blocks. NO explanations. NO "Here is the JSON" preamble.
+
 Format:
 [
-  {"path": "src/main.py", "content": "...full file content..."},
-  {"path": "README.md", "content": "..."}
+  {"path": "src/main.py", "content": "full file content with escaped newlines as \\n"},
+  {"path": "README.md", "content": "# Title\\nDescription..."}
 ]
-Rules:
-- Always include a README.md file.
-- Generate ALL critical files needed to run the project (package.json, Cargo.toml, requirements.txt, entrypoints, etc).
-- Write complete, working, well-commented code.
-- Escape all special characters in content strings properly.
-- Do not truncate any file - write the full content.
-- Output ONLY the JSON array, nothing before or after it.`;
+
+CRITICAL RULES:
+1. Output MUST start with [ and end with ]
+2. Each file object must have exactly two fields: "path" (string) and "content" (string)
+3. In content strings, escape ALL special JSON characters:
+   - Newlines → \\n (literal backslash-n, NOT actual line breaks)
+   - Double quotes → \\"
+   - Backslashes → \\\\
+   - Tabs → \\t
+4. Include ALL files needed to run the project (package.json, requirements.txt, entry points, etc.)
+5. Always include a README.md
+6. Write complete, working, well-commented code
+7. Do NOT truncate content - write full files
+8. Do NOT use markdown formatting inside the JSON (no backtick code blocks)
+9. Do NOT include any text outside the JSON array
+
+Example of CORRECT output:
+[{"path": "main.py", "content": "print(\\"Hello\\")\\nprint(\\"World\\")"}, {"path": "README.md", "content": "# My Project\\nThis is a test."}]
+
+Example of WRONG output (DO NOT DO THIS):
+[backtick][backtick][backtick]json
+[{"path": "main.py", "content": "..."}]
+[backtick][backtick][backtick]
+Or:
+Here is the JSON: [{"path": "main.py", "content": "..."}]
+
+Remember: Start with [, end with ], no markdown, no explanations.`;
 
 type Step = 'setup' | 'preview' | 'building' | 'done';
 
@@ -106,16 +129,21 @@ export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreate
 
       if (activeProjectPath) {
         if (!qwenLocation?.found) {
-          setError('Modifying a project requires Qwen. Please install via Ollama.');
+          const modelName = qwenLocation?.model || 'a coding model';
+          setError(`Modifying a project requires a local AI model. Please run: ollama pull ${modelName.includes('deepseek') ? 'qwen2.5' : 'qwen2.5'}`);
           return;
         }
         const prompt = `I am making modifications to the active project "${projectName}".
 Requirements: ${freeformPrompt}
 Return a JSON array of exactly the individual files that need to be updated or created to achieve this. Do NOT output unchanged files. Return ONLY the JSON array.`;
+        console.log('[generateFiles] Sending prompt to AI, length:', prompt.length);
         const raw = await generate(prompt, enhancedSystemPrompt, tok => setStreamPreview(p => p + tok), activeProjectPath);
+        console.log('[generateFiles] Raw response length:', raw.length);
         files = parseFilesFromResponse(raw);
+        console.log('[generateFiles] Parsed files count:', files.length);
         if (!files.length) {
-          setError('Qwen did not return valid files. Check the AI Chat tab and try again.');
+          console.error('[generateFiles] No files parsed. Raw response preview:', raw.slice(0, 500));
+          setError(`AI model (${qwenLocation.model}) did not return valid files. Try again or use a different model.`);
           return;
         }
       } else if (mode === 'template' && selectedTemplate) {
@@ -131,17 +159,22 @@ Generate any EXTRA files needed beyond the base template. Return JSON array of {
         }
       } else if (mode === 'freeform') {
         if (!qwenLocation?.found) {
-          setError('Freeform generation requires Qwen. Please install via Ollama.');
+          const modelName = qwenLocation?.model || 'a coding model';
+          setError(`Freeform generation requires a local AI model. Please run: ollama pull ${modelName.includes('deepseek') ? 'qwen2.5' : 'qwen2.5'}`);
           return;
         }
         const prompt = `Generate a complete software project called "${projectName}".
 Description: ${description}
 Requirements: ${freeformPrompt}
 Return a JSON array of ALL project files with their full content.`;
+        console.log('[generateFiles] Sending prompt to AI, length:', prompt.length);
         const raw = await generate(prompt, enhancedSystemPrompt, tok => setStreamPreview(p => p + tok), activeProjectPath);
+        console.log('[generateFiles] Raw response length:', raw.length);
         files = parseFilesFromResponse(raw);
+        console.log('[generateFiles] Parsed files count:', files.length);
         if (!files.length) {
-          setError('Qwen did not return valid files. Check the AI Chat tab and try again.');
+          console.error('[generateFiles] No files parsed. Raw response preview:', raw.slice(0, 500));
+          setError(`AI model (${qwenLocation.model}) did not return valid files. Try again or use a different model.`);
           return;
         }
       }
@@ -151,6 +184,7 @@ Return a JSON array of ALL project files with their full content.`;
       setStreamPreview('');
       setStep('preview');
     } catch (e: any) {
+      console.error('[generateFiles] Error:', e);
       setError(String(e));
     } finally {
       setGenerating(false);
@@ -380,9 +414,31 @@ Return a JSON array of ALL project files with their full content.`;
             </div>
           )}
 
+          {qwenLocation?.found && (
+            <div className="form-group" style={{ marginTop: '8px', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '6px', fontSize: '13px' }}>
+              <span style={{ color: 'var(--green)' }}>✅</span> 
+              <span style={{ color: 'var(--text)', marginLeft: '8px' }}>
+                Model: <strong>{qwenLocation.model || 'Unknown'}</strong> 
+                <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>({qwenLocation.method})</span>
+              </span>
+            </div>
+          )}
+
+          {!qwenLocation?.found && qwenLocation?.method === 'ollama_no_model' && (
+            <div className="warning-box">
+              ⚠️ Ollama is installed but no models found. Run <code>ollama pull qwen2.5</code> to download a model.
+            </div>
+          )}
+
+          {!qwenLocation && (
+            <div className="warning-box">
+              ⏳ Scanning for models...
+            </div>
+          )}
+
           {generating && (
             <div className="stream-preview">
-              <div className="stream-label">🤖 Qwen is generating...</div>
+              <div className="stream-label">🤖 {qwenLocation?.model || 'Model'} is generating...</div>
               <pre className="stream-text">{streamPreview || '...'}</pre>
             </div>
           )}
@@ -491,49 +547,202 @@ Return a JSON array of ALL project files with their full content.`;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseFilesFromResponse(raw: string): GeneratedFile[] {
-  // Strategy 1: find a clean JSON array
+  console.log('[parseFilesFromResponse] Raw response length:', raw.length);
+  console.log('[parseFilesFromResponse] Raw preview (first 500 chars):', raw.slice(0, 500));
+
+  if (!raw || raw.trim().length === 0) {
+    console.log('[parseFilesFromResponse] Empty response');
+    return [];
+  }
+
+  // Strategy 1: Clean and parse as complete JSON array
   try {
-    const cleaned = raw
+    // Remove markdown code block markers and any surrounding text
+    let cleaned = raw
       .replace(/```json\s*/gi, '')
       .replace(/```\s*/g, '')
+      .replace(/^[^[\{]*/g, '')  // Remove everything before first [ or {
+      .replace(/[^}\]]*$/g, '')  // Remove everything after last ] or }
       .trim();
+
+    // Find the JSON array boundaries
     const start = cleaned.indexOf('[');
     const end = cleaned.lastIndexOf(']');
+
     if (start !== -1 && end !== -1 && end > start) {
       const json = cleaned.slice(start, end + 1);
+      console.log('[parseFilesFromResponse] Extracted JSON, length:', json.length);
+      console.log('[parseFilesFromResponse] JSON preview:', json.slice(0, 200));
+      
       const parsed = JSON.parse(json);
+
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.filter(f => f.path && typeof f.content === 'string');
+        const validFiles = parsed
+          .filter(f => f && f.path && typeof f.content === 'string')
+          .map(f => ({ path: String(f.path), content: String(f.content) }));
+        
+        console.log('[parseFilesFromResponse] JSON parse successful, valid files:', validFiles.length);
+        return validFiles;
       }
     }
-  } catch { }
+  } catch (e) {
+    console.log('[parseFilesFromResponse] Full JSON parse failed:', e);
+    console.log('[parseFilesFromResponse] Error details:', String(e));
+  }
 
-  // Strategy 2: extract individual file objects even if array is malformed/truncated
-  const files: GeneratedFile[] = [];
-  const objRegex = /\{\s*"path"\s*:\s*"([^"]+)"\s*,\s*"content"\s*:\s*("(?:[^"\\]|\\.)*"|`[^`]*`)/g;
-  let match;
-  while ((match = objRegex.exec(raw)) !== null) {
-    try {
-      const path = match[1];
-      // Parse the content string properly
-      const contentRaw = match[2];
-      const content = contentRaw.startsWith('`')
-        ? contentRaw.slice(1, -1)
-        : JSON.parse(contentRaw);
-      if (path && typeof content === 'string') {
-        files.push({ path, content });
+  // Strategy 2: Try to parse as array of objects without outer brackets
+  try {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      // Might be a single object or comma-separated objects
+      const wrapped = `[${trimmed}]`;
+      const parsed = JSON.parse(wrapped);
+      if (Array.isArray(parsed)) {
+        const validFiles = parsed
+          .filter(f => f && f.path && typeof f.content === 'string')
+          .map(f => ({ path: String(f.path), content: String(f.content) }));
+        if (validFiles.length > 0) {
+          console.log('[parseFilesFromResponse] Wrapped parse successful, files:', validFiles.length);
+          return validFiles;
+        }
       }
-    } catch { }
+    }
+  } catch (e) {
+    console.log('[parseFilesFromResponse] Wrapped parse failed:', e);
   }
-  if (files.length > 0) return files;
 
-  // Strategy 3: look for markdown code blocks with file path comments
-  const blockRegex = /#+\s*`?([^\n`]+\.\w+)`?\n```[\w]*\n([\s\S]*?)```/g;
+  // Strategy 3: Extract individual file objects using regex and balanced brace matching
+  console.log('[parseFilesFromResponse] Attempting object extraction...');
+  const files: GeneratedFile[] = [];
+  const seenPaths = new Set<string>();
+
+  // Find all potential file objects by looking for "path" and "content" keys
+  let pos = 0;
+  while (pos < raw.length) {
+    // Find next occurrence of "path" or "content"
+    const pathMatch = raw.indexOf('"path"', pos);
+    const contentMatch = raw.indexOf('"content"', pos);
+
+    if (pathMatch === -1 && contentMatch === -1) break;
+
+    // Find the start of the object (opening brace before path/content)
+    let objStart = pathMatch !== -1 && contentMatch !== -1 
+      ? Math.min(pathMatch, contentMatch)
+      : pathMatch !== -1 ? pathMatch : contentMatch;
+
+    // Look backwards for opening brace (within 200 chars)
+    let braceCount = 0;
+    let startIdx = objStart;
+    while (startIdx >= 0 && startIdx > objStart - 200) {
+      if (raw[startIdx] === '{') {
+        if (braceCount === 0) break;
+        braceCount--;
+      } else if (raw[startIdx] === '}') {
+        braceCount++;
+      }
+      startIdx--;
+    }
+
+    if (startIdx < 0 || raw[startIdx] !== '{') {
+      pos = objStart + 1;
+      continue;
+    }
+
+    // Find matching closing brace with proper string/escape handling
+    let endIdx = objStart;
+    braceCount = 1;
+    let inString = false;
+    let escapeNext = false;
+
+    while (endIdx < raw.length && braceCount > 0) {
+      endIdx++;
+      if (endIdx >= raw.length) break;
+      
+      const char = raw[endIdx];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') braceCount++;
+        else if (char === '}') braceCount--;
+      }
+    }
+
+    if (braceCount !== 0) {
+      pos = objStart + 1;
+      continue;
+    }
+
+    // Extract and try to parse this object
+    const objStr = raw.slice(startIdx, endIdx + 1);
+    try {
+      const obj = JSON.parse(objStr);
+      if (obj.path && typeof obj.content === 'string') {
+        const pathStr = String(obj.path);
+        if (!seenPaths.has(pathStr)) {
+          seenPaths.add(pathStr);
+          files.push({ path: pathStr, content: String(obj.content) });
+        }
+      }
+    } catch (e) {
+      // Try to manually extract path and content using regex
+      const pathMatch2 = objStr.match(/"path"\s*:\s*"([^"]+)"/);
+      const contentMatch2 = objStr.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (pathMatch2 && contentMatch2) {
+        const pathStr = pathMatch2[1];
+        if (!seenPaths.has(pathStr)) {
+          seenPaths.add(pathStr);
+          // Unescape the content
+          const content = contentMatch2[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+          files.push({ path: pathStr, content });
+        }
+      }
+    }
+
+    pos = endIdx + 1;
+  }
+
+  if (files.length > 0) {
+    console.log('[parseFilesFromResponse] Object extraction successful, files:', files.length);
+    return files;
+  }
+
+  // Strategy 4: Look for markdown code blocks with file path indicators
+  console.log('[parseFilesFromResponse] Attempting markdown block extraction...');
+  const blockRegex = /```(\w+)?\s*\n(?:\/\/|\/\*|#|<!--)?\s*([^\n]+)\n([\s\S]*?)```/g;
+  let match;
   while ((match = blockRegex.exec(raw)) !== null) {
-    files.push({ path: match[1].trim(), content: match[2] });
+    const potentialPath = match[2]?.trim();
+    if (potentialPath && (potentialPath.includes('/') || potentialPath.includes('.')) && potentialPath.length < 200) {
+      const pathStr = potentialPath.replace(/^[:\s]+/, '');
+      if (!seenPaths.has(pathStr)) {
+        seenPaths.add(pathStr);
+        files.push({ path: pathStr, content: match[3].trim() });
+      }
+    }
   }
 
-  return files;
+  if (files.length > 0) {
+    console.log('[parseFilesFromResponse] Markdown block extraction successful, files:', files.length);
+    return files;
+  }
+
+  console.log('[parseFilesFromResponse] No files could be extracted');
+  console.log('[parseFilesFromResponse] Full response preview:', raw.slice(0, 1000));
+  return [];
 }
 
 function mergFiles(base: GeneratedFile[], extra: GeneratedFile[]): GeneratedFile[] {
