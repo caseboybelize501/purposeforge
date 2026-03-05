@@ -1,4 +1,5 @@
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
 use tauri::{AppHandle, Emitter};
 use serde::{Deserialize, Serialize};
 
@@ -156,11 +157,7 @@ async fn stream_ollama(
     let mut body = serde_json::json!({
         "model": model,
         "prompt": prompt,
-        "stream": true,
-        "options": {
-            "num_predict": 16384,
-            "temperature": 0.2
-        }
+        "stream": true
     });
     if let Some(sys) = system {
         body["system"] = serde_json::Value::String(sys.to_string());
