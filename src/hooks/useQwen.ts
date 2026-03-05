@@ -32,6 +32,7 @@ export function useQwen() {
     system?: string,
     onToken?: (token: string) => void,
     projectPath?: string | null,
+    contextFiles?: string[] | null,
   ): Promise<string> => {
     if (!location?.found) throw new Error('Qwen not found');
     setStreamedText('');
@@ -45,7 +46,7 @@ export function useQwen() {
     unlistenRef.current = unlisten;
 
     try {
-      const result = await qwenGenerate(location, prompt, system, projectPath);
+      const result = await qwenGenerate(location, prompt, system, projectPath, contextFiles);
       return result;
     } finally {
       unlisten();

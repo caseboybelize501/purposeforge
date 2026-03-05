@@ -10,8 +10,20 @@ import type {
 export const locateQwen = () =>
   invoke<QwenLocation>('locate_qwen');
 
-export const qwenGenerate = (location: QwenLocation, prompt: string, system?: string, projectPath?: string | null) =>
-  invoke<string>('qwen_generate', { location, prompt, system: system ?? null, projectPath: projectPath ?? null });
+export const qwenGenerate = (
+  location: QwenLocation,
+  prompt: string,
+  system?: string,
+  projectPath?: string | null,
+  contextFiles?: string[] | null
+) =>
+  invoke<string>('qwen_generate', {
+    location,
+    prompt,
+    system: system ?? null,
+    projectPath: projectPath ?? null,
+    contextFiles: contextFiles ?? null
+  });
 
 // ── Token Counter ─────────────────────────────────────────────────────────────
 export const countTokens = (text: string) =>
