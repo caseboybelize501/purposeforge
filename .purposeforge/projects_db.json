@@ -233,5 +233,29 @@
     "remote_url": "https://github.com/caseboybelize501/100marr",
     "tech_stack": [],
     "last_modified": 1772661035
+  },
+  {
+    "id": "eba529fe-7632-4cf8-b907-2fdecb073658",
+    "name": "startup.child",
+    "path": "D:\\Users\\CASE\\Projects/startup.child",
+    "remote_url": "https://github.com/caseboybelize501/startup.child",
+    "tech_stack": [],
+    "last_modified": 1772761154
+  },
+  {
+    "id": "bb0268f0-610f-44de-8e33-508e5388b2e3",
+    "name": "startup.build",
+    "path": "D:\\Users\\CASE\\Projects/startup.build",
+    "remote_url": "https://github.com/caseboybelize501/startup.build",
+    "tech_stack": [],
+    "last_modified": 1772761293
+  },
+  {
+    "id": "02b475fa-c67c-4e25-9be8-6af69ce9dddd",
+    "name": "migration.credits",
+    "path": "D:\\Users\\CASE\\Projects/migration.credits",
+    "remote_url": "https://github.com/caseboybelize501/migration.credits",
+    "tech_stack": [],
+    "last_modified": 1772767098
   }
 ]
