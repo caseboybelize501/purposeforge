@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ghAuthStatus, ghListRepos } from './lib/api';
 import { useModel } from './hooks/useModelPhased';
-import BuilderPanel from './components/builder/BuilderPanel';
+import BuilderPanelPhased from './components/builder/BuilderPanelPhased';
 import RepoPanel from './components/repo/RepoPanel';
 import AIPanel from './components/ai/AIPanel';
 import DashboardPanel from './components/dashboard/DashboardPanel';
@@ -133,9 +133,8 @@ export default function App() {
           />
         )}
         {tab === 'builder' && (
-          <BuilderPanel
+          <BuilderPanelPhased
             modelLocation={modelLocation}
-            ghLoggedIn={ghLoggedIn}
             onProjectCreated={loadRepos}
             activeProjectPath={activeProjectPath}
           />
