@@ -1,5 +1,5 @@
-// ── Qwen ──────────────────────────────────────────────────────────────────────
-export interface QwenLocation {
+// ── Model ──────────────────────────────────────────────────────────────────────
+export interface ModelLocation {
   found: boolean;
   method: 'ollama' | 'lmstudio' | 'binary' | 'ollama_no_model' | 'none';
   path: string | null;
@@ -142,8 +142,12 @@ export interface ModuleDefinition {
 export type Tab = 'builder' | 'repos' | 'ai' | 'dashboard';
 
 export interface AppState {
-  qwen: QwenLocation | null;
+  model: ModelLocation | null;
   ghLoggedIn: boolean;
   ghUser: string | null;
   activeTab: Tab;
 }
+
+// ── Phased Generation ─────────────────────────────────────────────────────────
+// Re-export all phased generation types
+export * from './phased-generation';

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { getTemplates, templateToFiles, buildAndPushProject, getSkills, readFileContent, listTrackedProjects } from '../../lib/api';
-import { useQwen } from '../../hooks/useQwen';
-import type { ProjectTemplate, GeneratedFile, QwenLocation, Skill, ProjectRecord } from '../../types';
+import { useModel } from '../../hooks/useModelPhased';
+import type { ProjectTemplate, GeneratedFile, ModelLocation, Skill, ProjectRecord } from '../../types';
 
 interface Props {
-  qwenLocation: QwenLocation | null;
+  modelLocation: ModelLocation | null;
   ghLoggedIn: boolean;
   onProjectCreated: () => void;
   activeProjectPath: string | null;
@@ -50,7 +50,7 @@ Remember: Start with [, end with ], no markdown, no explanations.`;
 
 type Step = 'setup' | 'preview' | 'building' | 'done';
 
-export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreated, activeProjectPath }: Props) {
+export default function BuilderPanel({ modelLocation, ghLoggedIn, onProjectCreated, activeProjectPath }: Props) {
   const [step, setStep] = useState<Step>('setup');
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -83,7 +83,7 @@ export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreate
     }
   }, [activeProjectPath]);
 
-  const { generate } = useQwen();
+  const { generate } = useModel();
 
   useEffect(() => {
     getTemplates().then(setTemplates).catch(console.error);
@@ -128,8 +128,8 @@ export default function BuilderPanel({ qwenLocation, ghLoggedIn, onProjectCreate
         : `${SYSTEM_PROMPT}${memoryPrompt}`;
 
       if (activeProjectPath) {
-        if (!qwenLocation?.found) {
-          const modelName = qwenLocation?.model || 'a coding model';
+        if (!modelLocation?.found) {
+          const modelName = modelLocation?.model || 'a coding model';
           setError(`Modifying a project requires a local AI model. Please run: ollama pull ${modelName.includes('deepseek') ? 'qwen2.5' : 'qwen2.5'}`);
           return;
         }
@@ -143,12 +143,12 @@ Return a JSON array of exactly the individual files that need to be updated or c
         console.log('[generateFiles] Parsed files count:', files.length);
         if (!files.length) {
           console.error('[generateFiles] No files parsed. Raw response preview:', raw.slice(0, 500));
-          setError(`AI model (${qwenLocation.model}) did not return valid files. Try again or use a different model.`);
+          setError(`AI model (${modelLocation.model}) did not return valid files. Try again or use a different model.`);
           return;
         }
       } else if (mode === 'template' && selectedTemplate) {
         files = await templateToFiles(selectedTemplate, projectName, description);
-        if (freeformPrompt && qwenLocation?.found) {
+        if (freeformPrompt && modelLocation?.found) {
           const prompt = `I have a ${selectedTemplate} project called "${projectName}".
 ${description}
 Additional requirements: ${freeformPrompt}
@@ -158,8 +158,8 @@ Generate any EXTRA files needed beyond the base template. Return JSON array of {
           files = mergFiles(files, extraFiles);
         }
       } else if (mode === 'freeform') {
-        if (!qwenLocation?.found) {
-          const modelName = qwenLocation?.model || 'a coding model';
+        if (!modelLocation?.found) {
+          const modelName = modelLocation?.model || 'a coding model';
           setError(`Freeform generation requires a local AI model. Please run: ollama pull ${modelName.includes('deepseek') ? 'qwen2.5' : 'qwen2.5'}`);
           return;
         }
@@ -174,7 +174,7 @@ Return a JSON array of ALL project files with their full content.`;
         console.log('[generateFiles] Parsed files count:', files.length);
         if (!files.length) {
           console.error('[generateFiles] No files parsed. Raw response preview:', raw.slice(0, 500));
-          setError(`AI model (${qwenLocation.model}) did not return valid files. Try again or use a different model.`);
+          setError(`AI model (${modelLocation.model}) did not return valid files. Try again or use a different model.`);
           return;
         }
       }
@@ -414,23 +414,23 @@ Return a JSON array of ALL project files with their full content.`;
             </div>
           )}
 
-          {qwenLocation?.found && (
+          {modelLocation?.found && (
             <div className="form-group" style={{ marginTop: '8px', padding: '8px 12px', background: 'var(--surface2)', borderRadius: '6px', fontSize: '13px' }}>
-              <span style={{ color: 'var(--green)' }}>✅</span> 
+              <span style={{ color: 'var(--green)' }}>✅</span>
               <span style={{ color: 'var(--text)', marginLeft: '8px' }}>
-                Model: <strong>{qwenLocation.model || 'Unknown'}</strong> 
-                <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>({qwenLocation.method})</span>
+                Model: <strong>{modelLocation.model || 'Unknown'}</strong>
+                <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>({modelLocation.method})</span>
               </span>
             </div>
           )}
 
-          {!qwenLocation?.found && qwenLocation?.method === 'ollama_no_model' && (
+          {!modelLocation?.found && modelLocation?.method === 'ollama_no_model' && (
             <div className="warning-box">
               ⚠️ Ollama is installed but no models found. Run <code>ollama pull qwen2.5</code> to download a model.
             </div>
           )}
 
-          {!qwenLocation && (
+          {!modelLocation && (
             <div className="warning-box">
               ⏳ Scanning for models...
             </div>
@@ -438,7 +438,7 @@ Return a JSON array of ALL project files with their full content.`;
 
           {generating && (
             <div className="stream-preview">
-              <div className="stream-label">🤖 {qwenLocation?.model || 'Model'} is generating...</div>
+              <div className="stream-label">🤖 {modelLocation?.model || 'Model'} is generating...</div>
               <pre className="stream-text">{streamPreview || '...'}</pre>
             </div>
           )}

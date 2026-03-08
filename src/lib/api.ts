@@ -1,28 +1,43 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  QwenLocation, Repo, PullRequest, Issue, CommitResult,
+  ModelLocation, Repo, PullRequest, Issue, CommitResult,
   GeneratedFile, ProjectTemplate, BuildProjectRequest, BuildResult,
   ProjectRecord, ModuleDefinition, Skill, TokenCount, Message,
   ValidationResult, ValidationReport, Branch
 } from '../types';
 
-// ── Qwen ──────────────────────────────────────────────────────────────────────
-export const locateQwen = () =>
-  invoke<QwenLocation>('locate_qwen');
+// ── Model ──────────────────────────────────────────────────────────────────────
+export const locateModel = () =>
+  invoke<ModelLocation>('locate_model');
 
-export const qwenGenerate = (
-  location: QwenLocation,
+export const modelGenerate = (
+  location: ModelLocation,
   prompt: string,
   system?: string,
   projectPath?: string | null,
   contextFiles?: string[] | null
 ) =>
-  invoke<string>('qwen_generate', {
+  invoke<string>('model_generate', {
     location,
     prompt,
     system: system ?? null,
     projectPath: projectPath ?? null,
     contextFiles: contextFiles ?? null
+  });
+
+export const modelGeneratePhased = (
+  location: ModelLocation,
+  phase: 'assessment' | 'architecture' | 'manifest' | 'codegen',
+  context: any,
+  previousResults?: any,
+  codegenFile?: any
+) =>
+  invoke<string>('model_generate_phased', {
+    location,
+    phase,
+    context,
+    previousResults: previousResults ?? null,
+    codegenFile: codegenFile ?? null
   });
 
 // ── Token Counter ─────────────────────────────────────────────────────────────

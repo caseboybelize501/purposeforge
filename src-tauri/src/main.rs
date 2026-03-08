@@ -7,21 +7,22 @@ mod commands {
     pub mod github;
     pub mod injector;
     pub mod modifier;
-    pub mod qwen;
+    pub mod model;
     pub mod tracker;
     pub mod token_counter;
     pub mod validator;
 }
 
-use commands::{builder::*, executor::*, github::*, injector::*, modifier::*, qwen::*, tracker::*, token_counter::*, validator::*};
+use commands::{builder::*, executor::*, github::*, injector::*, modifier::*, model::*, tracker::*, token_counter::*, validator::*};
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            // Qwen / AI
-            locate_qwen,
-            qwen_generate,
+            // Model / AI
+            locate_model,
+            model_generate,
+            model_generate_phased,
             // Token Counter
             count_tokens,
             validate_prompt_size,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ghAuthStatus, ghListRepos } from './lib/api';
-import { useQwen } from './hooks/useQwen';
+import { useModel } from './hooks/useModelPhased';
 import BuilderPanel from './components/builder/BuilderPanel';
 import RepoPanel from './components/repo/RepoPanel';
 import AIPanel from './components/ai/AIPanel';
@@ -15,7 +15,7 @@ export default function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [reposLoading, setReposLoading] = useState(false);
   const [activeProjectPath, setActiveProjectPath] = useState<string | null>(null);
-  const { location: qwenLocation, scanning: qwenScanning, scan: scanQwen } = useQwen();
+  const { location: modelLocation, scanning: modelScanning, scan: scanModel } = useModel();
 
   // Check GitHub auth on mount
   useEffect(() => {
@@ -54,11 +54,11 @@ export default function App() {
     }
   };
 
-  const qwenStatus = qwenScanning
+  const modelStatus = modelScanning
     ? '⏳ Scanning...'
-    : qwenLocation?.found
-      ? `🟢 ${qwenLocation.model ?? 'Qwen'} (${qwenLocation.method})`
-      : '🔴 Qwen not found';
+    : modelLocation?.found
+      ? `🟢 ${modelLocation.model ?? 'Model'} (${modelLocation.method})`
+      : '🔴 Model not found';
 
   const ghStatus = ghLoggedIn
     ? `🟢 ${ghUser ?? 'GitHub'}`
@@ -91,11 +91,11 @@ export default function App() {
         {/* Status panel */}
         <div className="sidebar-status">
           <div className="status-row">
-            <span className="status-label">Qwen</span>
-            <span className="status-value">{qwenStatus}</span>
+            <span className="status-label">Model</span>
+            <span className="status-value">{modelStatus}</span>
           </div>
-          {!qwenLocation?.found && !qwenScanning && (
-            <button className="status-action" onClick={scanQwen}>Rescan</button>
+          {!modelLocation?.found && !modelScanning && (
+            <button className="status-action" onClick={scanModel}>Rescan</button>
           )}
 
           <div className="status-row" style={{ marginTop: 12 }}>
@@ -108,10 +108,10 @@ export default function App() {
         </div>
 
         {/* Setup hint if missing deps */}
-        {(!qwenLocation?.found || !ghLoggedIn) && (
+        {(!modelLocation?.found || !ghLoggedIn) && (
           <div className="setup-hint">
-            {!qwenLocation?.found && (
-              <p>Install Qwen:<br />
+            {!modelLocation?.found && (
+              <p>Install a coding model:<br />
                 <code>ollama pull qwen3-coder</code>
               </p>
             )}
@@ -134,7 +134,7 @@ export default function App() {
         )}
         {tab === 'builder' && (
           <BuilderPanel
-            qwenLocation={qwenLocation}
+            modelLocation={modelLocation}
             ghLoggedIn={ghLoggedIn}
             onProjectCreated={loadRepos}
             activeProjectPath={activeProjectPath}
@@ -149,7 +149,7 @@ export default function App() {
         )}
         {tab === 'ai' && (
           <AIPanel
-            qwenLocation={qwenLocation}
+            modelLocation={modelLocation}
             activeProjectPath={activeProjectPath}
           />
         )}

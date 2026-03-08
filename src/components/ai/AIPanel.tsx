@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { useQwen } from '../../hooks/useQwen';
-import type { QwenLocation } from '../../types';
+import { useModel } from '../../hooks/useModelPhased';
+import type { ModelLocation } from '../../types';
 
 interface Props {
-  qwenLocation: QwenLocation | null;
+  modelLocation: ModelLocation | null;
   activeProjectPath: string | null;
 }
 
@@ -13,16 +13,16 @@ interface Message {
   streaming?: boolean;
 }
 
-const SYSTEM = `You are Qwen Coder, an expert programming assistant embedded in PurposeForge, 
+const SYSTEM = `You are an expert programming assistant embedded in PurposeForge,
 a modular software builder. Help users with code, architecture, debugging, and project planning.
 Be concise but thorough. Use markdown for code blocks.`;
 
-export default function AIPanel({ qwenLocation, activeProjectPath }: Props) {
+export default function AIPanel({ modelLocation, activeProjectPath }: Props) {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hi! I\'m Qwen Coder. Ask me anything about your code, architecture, or project design. I can also help you refine what the Builder should generate.' }
+    { role: 'assistant', content: 'Hi! I\'m your AI assistant. Ask me anything about your code, architecture, or project design. I can also help you refine what the Builder should generate.' }
   ]);
   const [input, setInput] = useState('');
-  const { generate, generating } = useQwen();
+  const { generate, generating } = useModel();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function AIPanel({ qwenLocation, activeProjectPath }: Props) {
 
   const sendMessage = async () => {
     if (!input.trim() || generating) return;
-    if (!qwenLocation?.found) return;
+    if (!modelLocation?.found) return;
 
     const userMsg = input.trim();
     setInput('');
@@ -77,16 +77,16 @@ export default function AIPanel({ qwenLocation, activeProjectPath }: Props) {
           {activeProjectPath && (
             <span className="status-chip blue">🎯 {activeProjectPath.split('\\').pop()}</span>
           )}
-          {qwenLocation?.found
-            ? <span className="status-chip green">🟢 {qwenLocation.model ?? 'Qwen'}</span>
-            : <span className="status-chip red">🔴 Qwen not connected</span>
+          {modelLocation?.found
+            ? <span className="status-chip green">🟢 {modelLocation.model ?? 'Model'}</span>
+            : <span className="status-chip red">🔴 Model not connected</span>
           }
         </div>
       </div>
 
-      {!qwenLocation?.found && (
+      {!modelLocation?.found && (
         <div className="warning-box">
-          Qwen Coder is not running. Install via Ollama:<br />
+          AI model is not running. Install via Ollama:<br />
           <code>ollama pull qwen3-coder</code><br />
           Then click <strong>Rescan</strong> in the sidebar.
         </div>
@@ -108,16 +108,16 @@ export default function AIPanel({ qwenLocation, activeProjectPath }: Props) {
         <textarea
           className="chat-input"
           rows={3}
-          placeholder={qwenLocation?.found ? 'Ask Qwen anything... (Shift+Enter for newline)' : 'Connect Qwen to start chatting'}
+          placeholder={modelLocation?.found ? 'Ask AI anything... (Shift+Enter for newline)' : 'Connect model to start chatting'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          disabled={!qwenLocation?.found || generating}
+          disabled={!modelLocation?.found || generating}
         />
         <button
           className="btn btn-primary send-btn"
           onClick={sendMessage}
-          disabled={!qwenLocation?.found || generating || !input.trim()}
+          disabled={!modelLocation?.found || generating || !input.trim()}
         >
           {generating ? '⏳' : '→'}
         </button>
